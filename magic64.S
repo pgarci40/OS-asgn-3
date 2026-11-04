@@ -35,8 +35,6 @@ FNAME:
     movq %r10, 80(%rdi)
     movq %r11, 88(%rdi)
     movq %r12, 96(%rdi)
-    PA3.md 2026-10-07
-    15 / 16
     movq %r13,104(%rdi)
     movq %r14,112(%rdi)
     movq %r15,120(%rdi)

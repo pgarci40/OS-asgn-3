@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "lwp.h"
+#include "rr.h"
 
 /* Light Weight Processes (LWP)
 creates a new lightweight process which executes the given function
@@ -17,7 +18,12 @@ returns the lightweight thread id of the new thread or no thread*/
 static tid_t next_tid = 1;
 static struct threadinfo_st original_thread;
 static thread current_lwp = NULL;
-static struct rfile testrfile;
+static thread thread_list_head;
+static thread terminated_head;
+static thread terminated_tail;
+static thread waiting_head;
+static thread waiting_tail;
+static scheduler current_sched = NULL;
 static void lwp_wrap(lwpfun function, void *arg){
     int rval = function(arg);
     lwp_exit(rval);
@@ -163,7 +169,7 @@ void lwp_exit(int exitval){
             thread next_thread = current_scheduler->next();
             if(next_thread){
                 current_lwp = next_thread;
-                swap_rfiles(&testrfile, &(next_thread->state));
+                swap_rfiles(NULL, &(next_thread->state));
             }
         }
 
@@ -222,7 +228,7 @@ tid_t lwp_wait(int *status){
         waiting_tail = current_lwp;
     }
     /*yield to next thread*/
-    lwp_yeild();
+    lwp_yield();
 
         /*now avilable in terminated_head*/
     return lwp_wait(status);

@@ -3,12 +3,13 @@
 
 int thread_function(void *arg){
     char *name = (char *)arg;
-    for(int i = 0; i < 3; i++){
+    int i;
+    for(i = 0; i < 3; i++){
         printf("Thread %s is running (%d)\n", name, i);
         lwp_yield();
     }
     printf("Thread %s exiting\n", name);
-    return 0;    
+    return 0;
 }
 
 int main(void){
