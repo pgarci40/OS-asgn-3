@@ -6,7 +6,7 @@
 #include "lwp.h"
 
 /* Light Weight Processes (LWP)
-creates a new lightweight process which executes the given function 
+creates a new lightweight process which executes the given function
 with the given argument
 returns the lightweight thread id of the new thread or no thread*/
 
@@ -35,10 +35,10 @@ tid_t lwp_create(lwpfun function, void *argument){
     /* void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);*/
     size_t stacksize = LWP_STACK_SIZE;
     void *stack_bottom = mmap(
-        NULL, 
+        NULL,
         stacksize,
         PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, 
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK,
         -1,
         0
     );
@@ -173,7 +173,7 @@ void lwp_exit(int exitval){
     }
 }
 
-/* tid_t lwp_wait(int* status) 
+/* tid_t lwp_wait(int* status)
 waits for thread to terminate, deallocates its resources, and reports its termination status*/
 static thread terminated_head = NULL;
 static thread terminated_tail = NULL;
@@ -248,4 +248,32 @@ thread tid2thread(tid_t tid){
         curr = curr->lib_one;
     }
     return NULL;
+}
+
+scheduler lwp_get_scheduler(void){
+    if(current_sched == NULL){
+        current_sched = RoundRobin;
+    }
+    return current_sched;
+}
+
+void lwp_set_scheduler(scheduler fun){
+    scheduler old = lwp_get_scheduler();
+    scheduler new_sched = (fun == NULL) ? RoundRobin : fun;
+    thread t;
+
+    if(new_sched == old){
+        return;
+    }
+    if(new_sched->init){
+        new_sched->init();
+    }
+    while((t = old->next()) != NULL){
+        old->remove(t);
+        new_sched->admit(t);
+    }
+    if(old->shutdown){
+        old->shutdown();
+    }
+    current_sched = new_sched;
 }
