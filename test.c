@@ -18,6 +18,7 @@ int main(void){
     lwp_create(thread_function, "B");
 
     lwp_start();
+    while(lwp_wait(NULL) != NO_THREAD);
     printf("LWP system finished.\n");
     return 0;
 }

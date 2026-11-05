@@ -30,15 +30,11 @@ static void lwp_wrap(lwpfun function, void *arg){
 }
 
 tid_t lwp_create(lwpfun function, void *argument){
-    /* Allocate a stack and a context for each LWP */
     thread new_thread = malloc(sizeof(struct threadinfo_st));
     if(!new_thread) {
         return NO_THREAD;
     }
     memset(new_thread, 0, sizeof(struct threadinfo_st));
-    /* Allocate the stack using mmap */
-    /* mmap(2) creates stacks in memory regions that are not connected to each other */
-    /* void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);*/
     size_t stacksize = LWP_STACK_SIZE;
     void *stack_bottom = mmap(
         NULL,
@@ -55,52 +51,46 @@ tid_t lwp_create(lwpfun function, void *argument){
 
     new_thread->lib_one = thread_list_head;
     thread_list_head = new_thread;
-    /* populating thread */
     new_thread->tid = next_tid++;
     new_thread->stack = (unsigned long *)stack_bottom;
     new_thread->stacksize = stacksize;
     new_thread->status = LWP_LIVE;
     new_thread->state.fxsave = FPU_INIT;
 
-    /* stack pointer and register context
-    stacks grown downwards aligning to 16 bytes */
     unsigned long *stackpointer = (unsigned long *)((char *)stack_bottom + stacksize);
     stackpointer = (unsigned long*)((unsigned long)stackpointer & ~15);
 
-    /* pushing exit onto the stack */
-    *(--stackpointer) = (unsigned long)lwp_exit;
+    *(--stackpointer) = 0;
+    *(--stackpointer) = (unsigned long)lwp_wrap;
+    *(--stackpointer) = 0;
+    new_thread->state.rsp = (unsigned long)stackpointer;
+    new_thread->state.rbp = (unsigned long)stackpointer;
+    new_thread->state.rdi = (unsigned long)function;
+    new_thread->state.rsi = (unsigned long)argument;
 
-    /* pushing entry function above exit */
-    *(--stackpointer) = (unsigned long)function;
-    /* placing arguments into registers */
-    new_thread->state.rsp = (unsigned long)stackpointer; /*stack pointer*/
-    new_thread->state.rdi = (unsigned long)argument; /*destination index*/
-
-    /* admit thread into pool*/
     scheduler current_scheduler = lwp_get_scheduler();
     if(current_scheduler && current_scheduler->admit){
         current_scheduler->admit(new_thread);
     }
     return new_thread->tid;
 }
+
 /* void lwp_start(void)
 converts calling thread into a LWP and yeilds to whichever thread the scheduler chooses*/
 void lwp_start(void){
     scheduler current_scheduler = lwp_get_scheduler();
-    if(!current_scheduler || !current_scheduler->next){
+    if(!current_scheduler || !current_scheduler->admit){
         return;
     }
-    /* grab thread from pool*/
-    thread next_thread = current_scheduler->next();
-    if(!next_thread){
-        return;
-    }
-    original_thread.tid = 0;
+    original_thread.tid = next_tid++;
     original_thread.status = LWP_LIVE;
+    original_thread.stack = NULL;
+    original_thread.lib_one = thread_list_head;
+    thread_list_head = &original_thread;
 
-    /*swap from original thread to the first LWP thread*/
-    /*loads the registers/stack of next thread*/
-    swap_rfiles(&original_thread.state, &next_thread->state);
+    current_lwp = &original_thread;
+    current_scheduler->admit(&original_thread);
+    lwp_yield();
 }
 
 /* void lwp_yield(void)
@@ -135,7 +125,7 @@ void lwp_exit(int exitval){
         if(waiting_head != NULL){
             thread waiting_thread = waiting_head;
             waiting_head = waiting_head->exited;
-            if(waiting_head = NULL){
+            if(waiting_head == NULL){
                 waiting_tail = NULL;
             }
             current_lwp->exited = NULL;
